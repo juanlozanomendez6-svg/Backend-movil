@@ -18,25 +18,36 @@ from app.routes.ventas_routes import router as ventas_router
 from app.routes.inventario_routes import router as inventario_router
 from app.routes.roles_routes import router as roles_router
 
-# =====================
-# INSTANCIA DE FASTAPI
-# =====================
-app = FastAPI(title="POS API", version="1.0.0")
 
 # =====================
-# MIDDLEWARES
+# INSTANCIA FASTAPI
+# =====================
+app = FastAPI(
+    title="POS API",
+    version="1.0.0"
+)
+
 # =====================
 # CORS
+# =====================
+allowed_origins = os.getenv("FRONTEND_URL", "http://localhost:19006")
+
+# Permite múltiples URLs separadas por coma
+allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:19006")],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
-# GZip para compresión de respuestas grandes
+# =====================
+# GZIP
+# =====================
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 # =====================
 # HEALTH CHECK
@@ -44,7 +55,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 @app.get("/health")
 async def health_check():
     """
-    Endpoint para verificar que el servidor está activo
+    Verifica que el servidor está activo.
     """
     return {
         "success": True,
@@ -53,30 +64,25 @@ async def health_check():
         "environment": os.getenv("ENVIRONMENT", "development")
     }
 
+
 # =====================
-# RUTAS
+# RUTAS PRINCIPALES
 # =====================
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(usuarios_router, prefix="/api/usuarios", tags=["usuarios"])
 app.include_router(productos_router, prefix="/api/productos", tags=["productos"])
-app.include_router(
-    producto_imagen_router,
-    prefix="/api/productos/{producto_id}/imagenes",
-    tags=["imagenes"]
-)
+app.include_router(producto_imagen_router, prefix="/api/productos", tags=["imagenes"])
 app.include_router(categorias_router, prefix="/api/categorias", tags=["categorias"])
 app.include_router(ventas_router, prefix="/api/ventas", tags=["ventas"])
 app.include_router(inventario_router, prefix="/api/inventario", tags=["inventario"])
 app.include_router(roles_router, prefix="/api/roles", tags=["roles"])
 
+
 # =====================
-# MANEJO DE ERRORES
+# MANEJO GLOBAL DE ERRORES
 # =====================
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
-    """
-    Maneja rutas no encontradas
-    """
     return JSONResponse(
         status_code=404,
         content={
@@ -85,15 +91,20 @@ async def not_found_handler(request: Request, exc):
         }
     )
 
+
 @app.exception_handler(Exception)
 async def global_error_handler(request: Request, exc):
     """
-    Maneja errores inesperados
+    Manejo global de errores sin exponer stacktrace en producción.
     """
+    env = os.getenv("ENVIRONMENT", "development")
+
+    error_message = str(exc) if env == "development" else "Error interno del servidor"
+
     return JSONResponse(
         status_code=500,
         content={
             "success": False,
-            "message": str(exc)
+            "message": error_message
         }
     )
